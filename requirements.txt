@@ -1,0 +1,12 @@
+# Runtime dependencies (LLD §2.1). Exact pinned versions for IT approval: requirements.lock
+fastapi>=0.115
+uvicorn>=0.30
+langgraph>=1.0
+# FastMCP server + ClientSession over stdio. mcp 2.x renamed FastMCP to MCPServer, so stay on 1.x.
+mcp>=1.25,<2
+# Claude API client. Only used when LLM_MODE=claude (server-side refusal fallbacks need >=2.9).
+anthropic>=2.9
+# OpenAI API client. Only used when LLM_MODE=openai (strict JSON-schema parse helpers).
+openai>=1.40
+# Multipart form parsing for dataset uploads (FastAPI UploadFile).
+python-multipart>=0.0.9

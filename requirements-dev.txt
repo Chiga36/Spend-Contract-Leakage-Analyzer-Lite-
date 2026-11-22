@@ -1,0 +1,3 @@
+# Developer machine only: runtime deps + the test runner (LLD §14).
+-r requirements.txt
+pytest>=8

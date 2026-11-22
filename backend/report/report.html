@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Spend Leakage Report · $run_id</title>
+<link rel="icon" href="data:,">
+<style>
+  :root {
+    --ink: #1c2430; --muted: #5b6676; --line: #dfe3e8; --soft: #f5f7f9;
+    --accent: #1f5f8b; --bar: #2f7fb5; --good: #1d7a4b; --warn: #a15c07; --bad: #b42318;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #fff; color: var(--ink);
+         font: 14px/1.5 "Segoe UI", system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif; }
+  main { max-width: 960px; margin: 0 auto; padding: 32px 28px 48px; }
+  header { border-bottom: 3px solid var(--accent); padding-bottom: 16px; margin-bottom: 24px; }
+  h1 { font-size: 26px; margin: 0 0 4px; letter-spacing: -0.01em; }
+  h2 { font-size: 17px; margin: 32px 0 12px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+  .meta { color: var(--muted); font-size: 13px; }
+  .meta span { margin-right: 18px; white-space: nowrap; }
+  .hint { background: #eef5fb; border: 1px solid #cfe2f1; border-radius: 6px; padding: 8px 12px;
+          font-size: 13px; margin-bottom: 20px; }
+  .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .tile { border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; background: var(--soft); }
+  .tile .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .tile .value { font-size: 22px; font-weight: 650; margin-top: 2px; font-variant-numeric: tabular-nums; }
+  .tile.primary { background: #eaf3ea; border-color: #cfe3d2; }
+  .tile.primary .value { color: var(--good); }
+  .bars { display: grid; grid-template-columns: 220px 1fr 120px; gap: 8px 12px; align-items: center; }
+  .bars .name { font-weight: 550; }
+  .bars .count { color: var(--muted); font-weight: 400; font-size: 12px; }
+  .bar { height: 14px; background: var(--soft); border-radius: 7px; overflow: hidden; }
+  .bar span { display: block; height: 100%; background: var(--bar); border-radius: 7px; min-width: 2px;
+              -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.03em; }
+  .finding { border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; margin-bottom: 10px;
+             break-inside: avoid; page-break-inside: avoid; }
+  .finding .head { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+  .finding .id { font-weight: 700; color: var(--accent); }
+  .finding .title { font-weight: 600; flex: 1; min-width: 240px; }
+  .finding .amt { font-weight: 700; font-variant-numeric: tabular-nums; }
+  .finding .sub { color: var(--muted); font-size: 12px; margin: 2px 0 8px; }
+  .calc { font-family: Consolas, "SFMono-Regular", Menlo, monospace; font-size: 12px; background: var(--soft);
+          border-radius: 4px; padding: 6px 8px; overflow-wrap: anywhere; }
+  .expl { margin: 8px 0 4px; }
+  .refs { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+  .note { font-size: 12px; margin-top: 6px; }
+  .pill { display: inline-block; font-size: 11px; font-weight: 650; padding: 1px 8px; border-radius: 10px;
+          border: 1px solid var(--line); background: #fff; }
+  .pill.HIGH { color: var(--bad); border-color: #f1c0bb; background: #fdf0ef; }
+  .pill.MEDIUM { color: var(--warn); border-color: #f0d6b0; background: #fdf6ec; }
+  .pill.LOW { color: var(--muted); }
+  .pill.ADJUSTED { color: var(--warn); }
+  .pill.APPROVED { color: var(--good); }
+  .empty { color: var(--muted); font-style: italic; }
+  footer { margin-top: 36px; padding-top: 12px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; }
+  @page { size: A4; margin: 16mm 14mm; }
+  @media print {
+    main { padding: 0; max-width: none; }
+    .hint { display: none; }
+    h2 { break-after: avoid; page-break-after: avoid; }
+    .tile { background: #fff; }
+  }
+  @media (max-width: 720px) {
+    .tiles { grid-template-columns: repeat(2, 1fr); }
+    .bars { grid-template-columns: 1fr 90px; }
+    .bars .bar { grid-column: 1 / -1; order: 3; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Spend &amp; Contract Leakage Report</h1>
+    <div class="meta">
+      <span>Run <strong>$run_id</strong></span>
+      <span>Period $date_from to $date_to</span>
+      <span>Price tolerance $tolerance%</span>
+      <span>Analysis passes $iteration</span>
+      <span>Generated $generated_at</span>
+    </div>
+  </header>
+
+  <div class="hint">To save as PDF, use your browser's <strong>Print</strong> command and choose <strong>Save as PDF</strong>.</div>
+
+  <section class="tiles">
+    <div class="tile primary"><div class="label">Approved leakage</div><div class="value">$approved_total</div></div>
+    <div class="tile"><div class="label">Approved findings</div><div class="value">$approved_count</div></div>
+    <div class="tile"><div class="label">Identified by the agent</div><div class="value">$identified_total</div></div>
+    <div class="tile"><div class="label">Rejected / not reviewed</div><div class="value">$rejected_count / $undecided_count</div></div>
+  </section>
+
+  <h2>Approved leakage by type</h2>
+  <div class="bars">$type_rows</div>
+
+  <h2>Top vendors by approved leakage</h2>
+  <div class="bars">$vendor_rows</div>
+
+  <h2>Approved findings ($approved_count)</h2>
+  $finding_rows
+
+  <h2>Method and data handling</h2>
+  <p>All dollar amounts were calculated by deterministic Python code from invoice, payment and contract data.
+     Each finding was reviewed by a consultant before inclusion: only <em>approved</em> and <em>adjusted</em>
+     findings appear in this report, and adjusted findings use the reviewer's amount.</p>
+  <p>$data_statement</p>
+
+  <footer>Spend &amp; Contract Leakage Analyzer · run $run_id · $generated_at</footer>
+</main>
+</body>
+</html>
