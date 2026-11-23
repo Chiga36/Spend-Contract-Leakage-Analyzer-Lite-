@@ -393,7 +393,9 @@ export default function StartPage({ health, healthError, onRetry, navigate }) {
                       <strong>LLM on: {health.llm_model}.</strong> {health.llm_provider} reads one contract at a time to extract
                       missing price tables, judges borderline vendor names, and writes short explanations. Only
                       those excerpts are sent to {health.llm_host}.
-                      {!health.llm_key_configured && ` No ${health.llm_key_name} is set, so these steps will fall back to offline behaviour.`}
+                      {!health.llm_key_configured &&
+                        ` Not configured (check ${health.llm_key_name} in .env), so these steps will fall back to offline behaviour.`}
+                      {health.llm_auth === "entra" && " Signs in with your Microsoft Entra ID account (no API key set)."}
                       {source === "upload" &&
                         " For confidential client data, use a paid or company API key (free tiers may use what you send), or set LLM_MODE=off."}
                     </>

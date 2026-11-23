@@ -8,5 +8,7 @@ mcp>=1.25,<2
 anthropic>=2.9
 # OpenAI API client. Only used when LLM_MODE=openai (strict JSON-schema parse helpers).
 openai>=1.40
+# Optional: only for Azure OpenAI without an API key (Microsoft Entra ID sign-in, e.g. az login).
+# azure-identity>=1.17
 # Multipart form parsing for dataset uploads (FastAPI UploadFile).
 python-multipart>=0.0.9

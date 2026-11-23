@@ -4,7 +4,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import os
 import re
 from contextlib import AsyncExitStack, asynccontextmanager, suppress
 from datetime import date
@@ -13,7 +12,7 @@ from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from .config import PROVIDERS, ROOT, get_settings
+from .config import PROVIDERS, ROOT, azure_auth, get_settings, llm_configured, provider_host
 from .datasets import DatasetError, build_dataset, get_meta, list_datasets, sample_zip
 from .evaluation import evaluate, load_ground_truth
 from .graph.build import build_graph
@@ -73,9 +72,11 @@ async def health() -> dict:
            "pid": mcp_client.pid, "llm_mode": settings.llm_mode,
            "llm_model": settings.llm_model if provider else None,
            "llm_provider": provider[0] if provider else None,
-           "llm_host": provider[1] if provider else None,
-           "llm_key_name": provider[2][0] if provider else None,
-           "llm_key_configured": bool(provider and any(os.environ.get(k) for k in provider[2])),
+           "llm_host": provider_host(settings.llm_mode),
+           "llm_key_name": ("AZURE_OPENAI_ENDPOINT, AZURE_OPENAI_DEPLOYMENT and AZURE_OPENAI_API_KEY"
+                            if settings.llm_mode == "azure" else provider[2][0] if provider else None),
+           "llm_key_configured": llm_configured(settings.llm_mode),
+           "llm_auth": azure_auth() if settings.llm_mode == "azure" else None,
            "data": None, "date_range": None, "defaults": None, "max_iterations": MAX_ITERATIONS}
     if mcp_client.session is not None:
         try:

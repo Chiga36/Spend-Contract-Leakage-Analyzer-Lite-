@@ -150,7 +150,29 @@ LLM_MODEL=                 # blank = gpt-5
 
 The OpenAI account must have API credits (https://platform.openai.com/settings/organization/billing/).
 
-### Option D: Anthropic Claude
+### Option D: Azure OpenAI (company resource)
+
+Use the same variable names as other Azure OpenAI projects. `LLM_MODE` can be left out: when
+`AZURE_OPENAI_ENDPOINT` is set, the app uses Azure OpenAI automatically.
+
+```ini
+AZURE_OPENAI_ENDPOINT="https://<resource>.openai.azure.com"
+AZURE_OPENAI_DEPLOYMENT="<deployment name>"
+AZURE_OPENAI_API_VERSION="2024-12-01-preview"
+
+# Only required when using API-key authentication locally
+AZURE_OPENAI_API_KEY="<key>"
+```
+
+- The **deployment name** is used as the model. Deployments of gpt-5 / o-series models get a reasoning
+  effort per task; others don't.
+- **Without `AZURE_OPENAI_API_KEY`**, the app signs in with Microsoft Entra ID: run
+  `.venv\Scripts\pip install azure-identity` once and `az login` (or use the laptop's managed identity).
+- Data stays in your company's Azure tenant, so this is the option for real client data.
+- Quotes around values are fine. Settings from another project's `.env` that this app doesn't use
+  (e.g. `API_BACKEND_PORT`, `DATABASE_PATH`) are ignored; use `PORT` / `HOST` to change the port.
+
+### Option E: Anthropic Claude
 
 ```ini
 LLM_MODE=claude
@@ -234,6 +256,9 @@ recall should reach or approach 72 of 72.
 | LLM calls fail with **429 – no credits** (OpenAI) | Add API credits to the OpenAI account |
 | LLM calls fail with **429** (Gemini free tier) | Per-minute limit: the app retries, so wait a minute and run again. *"Quota exceeded … per day"*: the model's daily free quota is used up. Switch `LLM_MODEL` to another model or wait for the reset |
 | 🛡️ *Guardrail* notes on the Analyze page | Expected: an input or output check fired (e.g. tax IDs redacted). See README, *Guardrails* |
+| Azure: **401** or **403** | Wrong `AZURE_OPENAI_API_KEY`, or (keyless) your account lacks the *Cognitive Services OpenAI User* role. Run `az login` again |
+| Azure: **404 – DeploymentNotFound** | `AZURE_OPENAI_DEPLOYMENT` must be the *deployment* name in Azure AI Foundry, not the model name |
+| Azure: **400 – response_format / json_schema** | Use `AZURE_OPENAI_API_VERSION=2024-12-01-preview` or newer, and a model that supports structured outputs (gpt-4o 2024-08-06 or later, gpt-4.1, gpt-5, o-series) |
 | LLM calls fail with **503 – high demand** | Google's model is overloaded. Try later or use another model in `LLM_MODEL` |
 | `address already in use` on port 8000 | Another copy is running. Stop it, or set `PORT=8001` in `.env` |
 | Upload says *missing column* / *not found in vendors.csv* | Fix the listed file and row; the sample files show the expected format. Nothing is saved until the whole upload is valid |

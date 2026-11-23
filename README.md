@@ -44,11 +44,12 @@ the file.
 
 | Setting | Default | Notes |
 |---|---|---|
-| `LLM_MODE` | `off` | `gemini`, `openai` or `claude` enables the three LLM uses. Any LLM failure falls back to offline behaviour. |
+| `LLM_MODE` | `off` | `gemini`, `openai`, `azure` or `claude` enables the three LLM uses. Any LLM failure falls back to offline behaviour. |
 | `LLM_MODEL` | per mode | Blank = `gemini-3.5-flash`, `gpt-5` or `claude-opus-5-5`. |
 | `GEMINI_API_KEY` | | Only for `LLM_MODE=gemini` (free key: https://aistudio.google.com/apikey). |
 | `OPENAI_API_KEY` | | Only for `LLM_MODE=openai`. |
 | `ANTHROPIC_API_KEY` | | Only for `LLM_MODE=claude`. |
+| `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_DEPLOYMENT`, `AZURE_OPENAI_API_VERSION`, `AZURE_OPENAI_API_KEY` | | For `LLM_MODE=azure` (chosen automatically when `LLM_MODE` is left out and the endpoint is set). The deployment name is the model. Without the key, Microsoft Entra ID sign-in is used (needs `azure-identity`). |
 | `HTTPS_PROXY` | | Corporate proxy for the LLM API. |
 | `LLM_MAX_CALLS_PER_RUN` / `LLM_MAX_CHARS_PER_RUN` | `100` / `1500000` | Guardrail G4: LLM budget per run. |
 | `PRICE_TOLERANCE_PCT` | `2` | Default on the Start page; can be changed per run and on re-run. |

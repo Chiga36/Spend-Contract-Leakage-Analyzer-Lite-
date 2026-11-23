@@ -81,7 +81,7 @@ def print_report(m: dict) -> None:
 
 async def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--mode", help="off | gemini | openai | claude (default: LLM_MODE from .env)")
+    ap.add_argument("--mode", help="off | gemini | openai | azure | claude (default: LLM_MODE from .env)")
     ap.add_argument("--model", help="model name (default: LLM_MODEL or the mode's default)")
     ap.add_argument("--tolerance", type=float, help="price tolerance in percent (default: PRICE_TOLERANCE_PCT)")
     args = ap.parse_args()

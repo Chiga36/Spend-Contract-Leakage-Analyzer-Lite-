@@ -1,4 +1,5 @@
-"""LLM calls (LLD §9): Claude, OpenAI or Gemini (LLM_MODE=claude|openai|gemini), or no-ops when LLM_MODE=off.
+"""LLM calls (LLD §9): Claude, OpenAI, Azure OpenAI or Gemini (LLM_MODE=claude|openai|azure|gemini),
+or no-ops when LLM_MODE=off.
 
 Rules every call follows:
   * Output is structured JSON constrained to a JSON schema and validated against a Pydantic
@@ -24,7 +25,7 @@ from typing import Any, TypeVar
 from pydantic import BaseModel, ValidationError
 
 from . import guardrails as gr
-from .config import GEMINI_BASE_URL, PROVIDERS, Settings
+from .config import AZURE_DEFAULT_API_VERSION, GEMINI_BASE_URL, PROVIDERS, Settings
 from .graph.detectors import TYPE_LABELS
 from .graph.state import emit
 from .models import Explanations, PairDecisions, PriceRow, PriceTable
@@ -79,6 +80,8 @@ class Llm:
             if self.mode == "openai":
                 from openai import AsyncOpenAI
                 self._client = AsyncOpenAI(timeout=120.0, max_retries=2)
+            elif self.mode == "azure":
+                self._client = azure_client()
             elif self.mode == "gemini":
                 from openai import AsyncOpenAI
                 key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
@@ -118,7 +121,7 @@ class Llm:
         t0 = time.perf_counter()
         try:
             async with self._sem:
-                if self.mode in ("openai", "gemini"):
+                if self.mode in ("openai", "gemini", "azure"):
                     return await self._openai_call(event, effort, system, user, schema)
                 from anthropic import transform_schema
                 response = await self._get_client().beta.messages.create(
@@ -164,12 +167,12 @@ class Llm:
     async def _openai_call(self, event: dict[str, Any], effort: str, system: str, user: str,
                            schema: type[T]) -> T | None:
         """Chat Completions with a strict JSON-schema response_format built from the Pydantic model.
-        Used for OpenAI and for Gemini's OpenAI-compatible endpoint."""
+        Used for OpenAI, Azure OpenAI (model = deployment name) and Gemini's OpenAI-compatible endpoint."""
         kwargs: dict[str, Any] = {}
         if self.mode == "openai":
             kwargs["store"] = False                    # OpenAI-only parameter
-            if is_openai_reasoning_model(self.model):  # non-reasoning models reject reasoning_effort
-                kwargs["reasoning_effort"] = effort
+        if self.mode in ("openai", "azure") and is_openai_reasoning_model(self.model):
+            kwargs["reasoning_effort"] = effort        # non-reasoning models reject reasoning_effort
         completion = await self._get_client().chat.completions.parse(
             model=self.model,
             max_completion_tokens=MAX_TOKENS,
@@ -271,6 +274,29 @@ def guardrail(purpose: str, rule: str, message: str) -> None:
     """Report a guardrail that fired: live event for the Analyze page, plus a log line."""
     log.warning("Guardrail %s: %s", rule, message)
     emit({"type": "guardrail", "node": PURPOSE_NODE.get(purpose, purpose), "rule": rule, "message": message})
+
+
+def azure_client() -> Any:
+    """AsyncAzureOpenAI from AZURE_OPENAI_ENDPOINT / _API_VERSION, with AZURE_OPENAI_API_KEY when set,
+    otherwise a Microsoft Entra ID token (az login, managed identity, ...) via azure-identity."""
+    from openai import AsyncAzureOpenAI
+    endpoint = os.environ.get("AZURE_OPENAI_ENDPOINT")
+    if not endpoint:
+        raise RuntimeError("AZURE_OPENAI_ENDPOINT is not set")
+    args: dict[str, Any] = {"azure_endpoint": endpoint, "timeout": 120.0, "max_retries": 3,
+                            "api_version": os.environ.get("AZURE_OPENAI_API_VERSION") or AZURE_DEFAULT_API_VERSION}
+    key = os.environ.get("AZURE_OPENAI_API_KEY")
+    if key:
+        args["api_key"] = key
+    else:
+        try:
+            from azure.identity.aio import DefaultAzureCredential, get_bearer_token_provider
+        except ImportError:
+            raise RuntimeError("Set AZURE_OPENAI_API_KEY, or install azure-identity to sign in with "
+                               "Microsoft Entra ID (pip install azure-identity, then az login)") from None
+        args["azure_ad_token_provider"] = get_bearer_token_provider(
+            DefaultAzureCredential(), "https://cognitiveservices.azure.com/.default")
+    return AsyncAzureOpenAI(**args)
 
 
 def is_openai_reasoning_model(model: str) -> bool:

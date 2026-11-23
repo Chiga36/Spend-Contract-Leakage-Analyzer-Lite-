@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import json
 import re
 from collections import defaultdict
@@ -163,7 +164,7 @@ class FakeCompletions:
 async def _run_openai(dataset, out, mode, provider="openai"):
     settings = dataset.settings(out, llm_mode=provider)
     llm = Llm(settings)
-    llm.model = "gpt-5" if provider == "openai" else "gemini-3.5-flash"
+    llm.model = {"openai": "gpt-5", "azure": "gpt-5.6-sol", "gemini": "gemini-3.5-flash"}[provider]
     fake = FakeCompletions(mode)
     llm._client = SimpleNamespace(chat=SimpleNamespace(completions=fake))
     async with AsyncExitStack() as stack:
@@ -181,7 +182,7 @@ async def _run_openai(dataset, out, mode, provider="openai"):
         return findings, [c for m, c in events if m == "custom"], fake.calls
 
 
-@pytest.mark.parametrize("provider", ["openai", "gemini"])
+@pytest.mark.parametrize("provider", ["openai", "azure", "gemini"])
 def test_openai_compatible_finds_what_offline_cannot(dataset, tmp_path, provider):
     findings, events, calls = asyncio.run(_run_openai(dataset, tmp_path, "ok", provider))
     groups = _by_type(findings)
@@ -192,12 +193,15 @@ def test_openai_compatible_finds_what_offline_cannot(dataset, tmp_path, provider
         if provider == "openai":
             assert kw["model"] == "gpt-5" and kw["store"] is False
             assert kw["reasoning_effort"] == efforts[kw["messages"][0]["content"]]
+        elif provider == "azure":   # model = deployment name; store is not sent to Azure
+            assert kw["model"] == "gpt-5.6-sol" and "store" not in kw
+            assert kw["reasoning_effort"] == efforts[kw["messages"][0]["content"]]
         else:   # Gemini's compatible endpoint: no OpenAI-only parameters
             assert kw["model"] == "gemini-3.5-flash" and "store" not in kw and "reasoning_effort" not in kw
     assert all(e["outcome"] == "ok" for e in events if e["type"] == "llm_call")
 
 
-@pytest.mark.parametrize("provider", ["openai", "gemini"])
+@pytest.mark.parametrize("provider", ["openai", "azure", "gemini"])
 @pytest.mark.parametrize("mode", ["refuse", "error"])
 def test_openai_compatible_failure_falls_back_to_offline(dataset, tmp_path, mode, provider):
     findings, events, calls = asyncio.run(_run_openai(dataset, tmp_path, mode, provider))
@@ -206,3 +210,47 @@ def test_openai_compatible_failure_falls_back_to_offline(dataset, tmp_path, mode
     assert llm_events and all(e["outcome"] == ("refusal" if mode == "refuse" else "error") for e in llm_events)
     expected = sum(v["offline_amount"] for v in dataset.ground_truth["totals_by_type"].values())
     assert sum(f["amount"] for f in findings) == pytest.approx(expected, rel=0.01)
+
+
+# ---------------------------------------------------------------- Azure OpenAI configuration
+AZURE_VARS = ("LLM_MODE", "LLM_MODEL", "AZURE_OPENAI_ENDPOINT", "AZURE_OPENAI_DEPLOYMENT",
+              "AZURE_OPENAI_API_VERSION", "AZURE_OPENAI_API_KEY")
+
+
+@pytest.fixture
+def azure_env(monkeypatch, tmp_path):
+    """Settings read from a .env laid out like the office one (quoted values, no LLM_MODE)."""
+    from backend import config
+    for v in AZURE_VARS:
+        monkeypatch.delenv(v, raising=False)
+    env = tmp_path / ".env"
+    env.write_text('AZURE_OPENAI_ENDPOINT="https://example-resource.openai.azure.com"\n'
+                   'AZURE_OPENAI_DEPLOYMENT="my-deployment"\n'
+                   'AZURE_OPENAI_API_VERSION="2024-12-01-preview"\n'
+                   '# Only required when using API-key authentication locally\n'
+                   'AZURE_OPENAI_API_KEY="test-key-not-real"\n', encoding="utf-8")
+    real_loader = config.load_env_file
+    monkeypatch.setattr(config, "load_env_file", lambda path=env: real_loader(env))
+    config.get_settings.cache_clear()
+    yield config
+    config.get_settings.cache_clear()
+    for v in AZURE_VARS:
+        os.environ.pop(v, None)
+
+
+def test_azure_env_layout_selects_azure(azure_env):
+    s = azure_env.get_settings()
+    assert s.llm_mode == "azure" and s.llm_model == "my-deployment"
+    assert azure_env.provider_host("azure") == "example-resource.openai.azure.com"
+    assert azure_env.llm_configured("azure") and azure_env.azure_auth() == "api-key"
+    from backend.llm import azure_client
+    client = azure_client()
+    assert str(client.base_url).startswith("https://example-resource.openai.azure.com/openai")
+    assert client.api_key == "test-key-not-real" and client._api_version == "2024-12-01-preview"
+
+
+def test_azure_without_key_or_identity_is_reported(azure_env, monkeypatch):
+    azure_env.get_settings()
+    os.environ.pop("AZURE_OPENAI_API_KEY", None)          # as if the key line were left out
+    monkeypatch.setattr(azure_env.importlib.util, "find_spec", lambda name: None)
+    assert azure_env.azure_auth() is None and not azure_env.llm_configured("azure")
